@@ -92,6 +92,8 @@ docker compose ps
 ```
 
 Open <http://localhost:8080>. The API is also available on port `5000`.
+The frontend host port defaults to `8080`; if that port is already in use, set
+`FRONTEND_PORT=8081` in the root `.env` and open <http://localhost:8081>.
 
 The PostgreSQL initialization scripts run **only when the `postgres_data` volume is first created**. Existing database volumes are preserved across restarts. Do not remove the volume to troubleshoot unless you intend to permanently delete its database contents.
 
@@ -164,7 +166,13 @@ kubectl rollout status deployment/frontend -n supporthub
 kubectl get pods,services -n supporthub
 ```
 
-Open <http://localhost:30080> when the local cluster exposes NodePorts. Alternatively, use `kubectl port-forward service/frontend 8080:80 -n supporthub` and open <http://localhost:8080>.
+Open <http://localhost:30080> when the local cluster exposes NodePorts. If the NodePort is not reachable from the host, forward the frontend to an available local port:
+
+```powershell
+kubectl port-forward service/frontend 8082:80 -n supporthub
+```
+
+Then open <http://localhost:8082>. Keep the port-forward command running while using the app.
 
 Create a protected environment file **outside the repository** containing `ADMIN_NAME`, `ADMIN_EMAIL`, and a private `ADMIN_PASSWORD` of at least 12 characters. Create the Kubernetes Secret and run the one-time seed Job:
 
@@ -172,10 +180,33 @@ Create a protected environment file **outside the repository** containing `ADMIN
 kubectl create secret generic supporthub-admin -n supporthub --from-env-file=C:\secure\supporthub-admin.env
 kubectl apply -f .\k8s\admin-seed-job.yaml
 kubectl wait --for=condition=complete job/supporthub-admin-seed -n supporthub --timeout=120s
+# If the password was generated into the Secret, retrieve and save it securely before deleting the Secret:
+kubectl get secret supporthub-admin -n supporthub -o jsonpath="{.data.ADMIN_PASSWORD}" | ForEach-Object { [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($_)) }
 kubectl delete secret supporthub-admin -n supporthub
 ```
 
 The seed command refuses to overwrite an existing account. Create additional agents and managers in the administrator's Team Management screen.
+
+## Postman and pgAdmin
+
+The read-only API smoke collection is in `postman/collections/`. Import it and one of the checked-in environments from `postman/environments/`. Set `adminEmail` and `adminPassword` locally; do not commit real passwords or tokens. Local environment copies named `*.local.json` are ignored by Git.
+
+The collection checks API/database health, administrator login, user listing, reports, and authorization responses. To run it with Newman, copy the environment template to a local file, fill in the administrator password, then run:
+
+```powershell
+Copy-Item .\postman\environments\supporthub-kubernetes.postman_environment.json .\postman\environments\supporthub-kubernetes.local.json
+npm exec --yes --package=newman -- newman run .\postman\collections\supporthub.postman_collection.json -e .\postman\environments\supporthub-kubernetes.local.json
+```
+
+For Docker Compose in pgAdmin, connect to host `localhost`, port `5435`, database `customer_support_db`, using `DB_USER` and `DB_PASSWORD` from the root `.env`.
+
+For Kubernetes, keep this port-forward running:
+
+```powershell
+kubectl port-forward service/postgres 5436:5432 -n supporthub
+```
+
+Add a separate pgAdmin server using host `localhost`, port `5436`, database `customer_support_db`, and the `DB_USER`/`DB_PASSWORD` values in the `supporthub-secrets` Secret. Retrieve secret values only in a local terminal; never paste them into source files or commit them.
 
 ## Tests and checks
 
