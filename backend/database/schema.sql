@@ -21,6 +21,14 @@ CREATE TABLE users (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id BIGSERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash CHAR(64) NOT NULL UNIQUE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- 2. TICKET CATEGORIES
 CREATE TABLE ticket_categories (
     id SERIAL PRIMARY KEY,
@@ -155,6 +163,12 @@ ON CONFLICT (name) DO NOTHING;
 -- ============================================
 
 CREATE INDEX idx_users_email ON users(email);
+
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user
+    ON password_reset_tokens(user_id);
+
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_expiry
+    ON password_reset_tokens(expires_at);
 
 CREATE INDEX idx_tickets_user ON tickets(user_id);
 

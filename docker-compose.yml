@@ -12,6 +12,7 @@ services:
       - ./backend/database/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
       - ./backend/database/migrations/001_notifications.sql:/docker-entrypoint-initdb.d/002_notifications.sql:ro
       - ./backend/database/migrations/002_ticket_workflow.sql:/docker-entrypoint-initdb.d/003_ticket_workflow.sql:ro
+      - ./backend/database/migrations/003_password_reset_tokens.sql:/docker-entrypoint-initdb.d/004_password_reset_tokens.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 5s
@@ -32,7 +33,14 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
       JWT_EXPIRES_IN: 1d
-      CORS_ORIGIN: http://localhost:8080
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080,http://localhost:8081,http://localhost:8082,http://localhost:30080}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
       UPLOAD_DIR: /app/uploads

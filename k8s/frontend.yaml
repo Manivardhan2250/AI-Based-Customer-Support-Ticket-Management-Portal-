@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: ai-support-frontend:local
+          image: ai-support-frontend:password-reset-v1
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -46,11 +46,10 @@ metadata:
   name: frontend
   namespace: supporthub
 spec:
-  type: NodePort
+  type: LoadBalancer
   selector:
     app: frontend
   ports:
     - name: http
-      port: 80
+      port: 8082
       targetPort: 80
-      nodePort: 30080

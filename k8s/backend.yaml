@@ -44,7 +44,7 @@ spec:
                   key: DB_NAME
       containers:
         - name: backend
-          image: ai-support-backend:local
+          image: ai-support-backend:password-reset-v1
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -68,6 +68,36 @@ spec:
                 secretKeyRef:
                   name: supporthub-secrets
                   key: JWT_SECRET
+            - name: SMTP_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: supporthub-mail
+                  key: SMTP_HOST
+                  optional: true
+            - name: SMTP_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: supporthub-mail
+                  key: SMTP_PORT
+                  optional: true
+            - name: SMTP_USER
+              valueFrom:
+                secretKeyRef:
+                  name: supporthub-mail
+                  key: SMTP_USER
+                  optional: true
+            - name: SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: supporthub-mail
+                  key: SMTP_PASSWORD
+                  optional: true
+            - name: MAIL_FROM
+              valueFrom:
+                secretKeyRef:
+                  name: supporthub-mail
+                  key: MAIL_FROM
+                  optional: true
             - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:

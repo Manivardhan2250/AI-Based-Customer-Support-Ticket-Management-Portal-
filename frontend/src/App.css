@@ -837,6 +837,39 @@ textarea:focus {
   font-weight: 700;
 }
 
+.password-input-wrap {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+.password-input-wrap input {
+  padding-right: 42px;
+}
+
+.password-visibility {
+  position: absolute;
+  top: 50%;
+  right: 9px;
+  display: grid;
+  place-items: center;
+  padding: 5px;
+  transform: translateY(-50%);
+  border: 0;
+  background: transparent;
+  color: #77839a;
+  cursor: pointer;
+}
+
+.password-visibility:hover,
+.password-visibility:focus-visible {
+  color: var(--brand-dark);
+}
+
+.password-visibility svg {
+  font-size: 14px;
+}
+
 .portal-form textarea,
 .reply-form textarea,
 .escalation-panel textarea {
@@ -1789,11 +1822,47 @@ textarea:focus {
   font-size: 11px;
 }
 
+.auth-forgot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -6px;
+}
+
+.auth-forgot button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--brand-dark);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.auth-feedback {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid #ccebdc;
+  border-radius: 8px;
+  background: #f0fbf5;
+  color: #24744d;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
 .auth-toggle {
   margin-top: 19px;
   color: #8a94a7;
   text-align: center;
   font-size: 10px;
+}
+
+.security-panel {
+  max-width: 620px;
+  padding: 22px;
+}
+
+.security-form {
+  max-width: 440px;
 }
 
 .auth-toggle button {

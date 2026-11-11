@@ -28,7 +28,7 @@ spec:
                   key: DB_NAME
       containers:
         - name: create-administrator
-          image: ai-support-backend:local
+          image: ai-support-backend:password-reset-v1
           imagePullPolicy: IfNotPresent
           command: ["node", "scripts/seedAdmin.js"]
           envFrom:

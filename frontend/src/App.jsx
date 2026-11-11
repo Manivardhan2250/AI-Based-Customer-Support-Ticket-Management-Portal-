@@ -14,6 +14,9 @@ import {
   FiFolder,
   FiHeadphones,
   FiHome,
+  FiEye,
+  FiEyeOff,
+  FiLock,
   FiLogOut,
   FiMenu,
   FiPlus,
@@ -58,11 +61,15 @@ function formatDate(value) {
 }
 
 function App() {
+  const [resetToken] = useState(() => new URLSearchParams(window.location.search).get('token') || '')
   const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(Boolean(localStorage.getItem('token')))
-  const [authMode, setAuthMode] = useState('login')
-  const [authForm, setAuthForm] = useState({ name: '', email: '', password: '' })
+  const [loading, setLoading] = useState(!resetToken && Boolean(localStorage.getItem('token')))
+  const [authMode, setAuthMode] = useState(resetToken ? 'reset' : 'login')
+  const [authForm, setAuthForm] = useState({ name: '', email: '', password: '', newPassword: '', confirmPassword: '' })
   const [authBusy, setAuthBusy] = useState(false)
+  const [authMessage, setAuthMessage] = useState('')
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
+  const [passwordBusy, setPasswordBusy] = useState(false)
   const [page, setPage] = useState('dashboard')
   const [selectedTicketId, setSelectedTicketId] = useState(null)
   const [error, setError] = useState('')
@@ -80,6 +87,11 @@ function App() {
   const [reloadVersion, setReloadVersion] = useState(0)
 
   useEffect(() => {
+    if (resetToken) {
+      localStorage.removeItem('token')
+      return undefined
+    }
+
     const token = localStorage.getItem('token')
     if (!token) return undefined
 
@@ -98,7 +110,7 @@ function App() {
     return () => {
       active = false
     }
-  }, [])
+  }, [resetToken])
 
   useEffect(() => {
     if (!user) return undefined
@@ -161,8 +173,35 @@ function App() {
   async function submitAuth(event) {
     event.preventDefault()
     setError('')
+    setAuthMessage('')
     setAuthBusy(true)
     try {
+      if (authMode === 'forgot') {
+        const { data } = await api.post('/auth/forgot-password', { email: authForm.email })
+        setAuthMessage(data.message)
+        return
+      }
+
+      if (authMode === 'reset') {
+        if (!resetToken) {
+          setError('This password reset link is invalid or expired. Request a new link.')
+          return
+        }
+        if (authForm.newPassword !== authForm.confirmPassword) {
+          setError('The new passwords do not match.')
+          return
+        }
+        const { data } = await api.post('/auth/reset-password', {
+          token: resetToken,
+          newPassword: authForm.newPassword,
+        })
+        setAuthMode('login')
+        setAuthForm({ name: '', email: '', password: '', newPassword: '', confirmPassword: '' })
+        setAuthMessage(data.message)
+        window.history.replaceState({}, '', window.location.pathname)
+        return
+      }
+
       const endpoint = authMode === 'login' ? '/auth/login' : '/auth/register'
       const payload = authMode === 'login'
         ? { email: authForm.email, password: authForm.password }
@@ -171,11 +210,34 @@ function App() {
       localStorage.setItem('token', data.token)
       setUser(data.user)
       setPage('dashboard')
-      setAuthForm({ name: '', email: '', password: '' })
+      setAuthForm({ name: '', email: '', password: '', newPassword: '', confirmPassword: '' })
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'Authentication failed.')
     } finally {
       setAuthBusy(false)
+    }
+  }
+
+  async function submitPasswordChange(event) {
+    event.preventDefault()
+    setError('')
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setError('The new passwords do not match.')
+      return
+    }
+
+    setPasswordBusy(true)
+    try {
+      const { data } = await api.post('/auth/change-password', {
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+      })
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
+      showNotice(data.message)
+    } catch (requestError) {
+      setError(requestError.response?.data?.message || 'Unable to change the password.')
+    } finally {
+      setPasswordBusy(false)
     }
   }
 
@@ -221,12 +283,14 @@ function App() {
         mode={authMode}
         form={authForm}
         error={error}
+        message={authMessage}
         busy={authBusy}
         onChange={(event) => setAuthForm({ ...authForm, [event.target.name]: event.target.value })}
         onSubmit={submitAuth}
-        onToggle={() => {
-          setAuthMode(authMode === 'login' ? 'register' : 'login')
+        onModeChange={(mode) => {
+          setAuthMode(mode)
           setError('')
+          setAuthMessage('')
         }}
       />
     )
@@ -245,6 +309,7 @@ function App() {
     team: 'Team management',
     reports: 'Reports & insights',
     notifications: 'Notifications',
+    security: 'Password & security',
   }
 
   const navItems = [
@@ -257,6 +322,7 @@ function App() {
       { id: 'team', label: isAdmin ? 'Team management' : 'Team directory', icon: FiUsers },
     ] : []),
     { id: 'notifications', label: 'Notifications', icon: FiBell },
+    { id: 'security', label: 'Password & security', icon: FiLock },
   ]
 
   return (
@@ -514,14 +580,48 @@ function App() {
               }}
             />
           )}
+          {page === 'security' && (
+            <PasswordSettings
+              user={user}
+              form={passwordForm}
+              busy={passwordBusy}
+              onChange={(event) => setPasswordForm({ ...passwordForm, [event.target.name]: event.target.value })}
+              onSubmit={submitPasswordChange}
+            />
+          )}
         </main>
       </div>
     </div>
   )
 }
 
-function AuthScreen({ mode, form, error, busy, onChange, onSubmit, onToggle }) {
+function AuthScreen({ mode, form, error, message, busy, onChange, onSubmit, onModeChange }) {
   const isLogin = mode === 'login'
+  const isRegister = mode === 'register'
+  const isForgot = mode === 'forgot'
+  const isReset = mode === 'reset'
+  const heading = isLogin
+    ? 'Sign in to your workspace'
+    : isRegister
+      ? 'Create your customer account'
+      : isForgot
+        ? 'Reset your password'
+        : 'Choose a new password'
+  const description = isLogin
+    ? 'Your support requests and updates are right where you left them.'
+    : isRegister
+      ? 'Create an account to submit and track your support requests.'
+      : isForgot
+        ? 'We’ll email a secure reset link if an active account matches.'
+        : 'Choose a new password to regain access to your account.'
+  const buttonText = isLogin
+    ? 'Sign in'
+    : isRegister
+      ? 'Create account'
+      : isForgot
+        ? 'Send reset link'
+        : 'Reset password'
+
   return (
     <div className="auth-layout">
       <section className="auth-story">
@@ -542,21 +642,99 @@ function AuthScreen({ mode, form, error, busy, onChange, onSubmit, onToggle }) {
       </section>
       <section className="auth-panel">
         <div className="auth-card-v2">
-          <span className="overline">{isLogin ? 'WELCOME BACK' : 'GET STARTED'}</span>
-          <h2>{isLogin ? 'Sign in to your workspace' : 'Create your customer account'}</h2>
-          <p>{isLogin ? 'Your support requests and updates are right where you left them.' : 'Create an account to submit and track your support requests.'}</p>
+          <span className="overline">{isLogin ? 'WELCOME BACK' : isRegister ? 'GET STARTED' : 'ACCOUNT RECOVERY'}</span>
+          <h2>{heading}</h2>
+          <p>{description}</p>
           {error && <div className="inline-error"><FiAlertCircle />{error}</div>}
+          {message && <div className="auth-feedback" role="status">{message}</div>}
           <form onSubmit={onSubmit} className="auth-form">
-            {!isLogin && <label>Full name<input name="name" value={form.name} onChange={onChange} autoComplete="name" required minLength={2} placeholder="Your name" /></label>}
-            <label>Email address<input name="email" type="email" value={form.email} onChange={onChange} autoComplete="email" required placeholder="you@company.com" /></label>
-            <label>Password<input name="password" type="password" value={form.password} onChange={onChange} autoComplete={isLogin ? 'current-password' : 'new-password'} minLength={isLogin ? undefined : 8} required placeholder={isLogin ? 'Enter your password' : 'At least 8 characters'} /></label>
-            <button className="button-primary auth-submit" disabled={busy}>{busy ? 'Please wait…' : isLogin ? 'Sign in' : 'Create account'}<FiArrowUpRight /></button>
+            {isRegister && <label>Full name<input name="name" value={form.name} onChange={onChange} autoComplete="name" required minLength={2} maxLength={100} placeholder="Your name" /></label>}
+            {!isReset && <label>Email address<input name="email" type="email" value={form.email} onChange={onChange} autoComplete="email" required placeholder="you@company.com" /></label>}
+            {(isLogin || isRegister) && (
+              <PasswordField
+                label="Password"
+                name="password"
+                value={form.password}
+                onChange={onChange}
+                autoComplete={isLogin ? 'current-password' : 'new-password'}
+                minLength={isRegister ? 12 : undefined}
+                maxLength={isRegister ? 72 : undefined}
+                placeholder={isLogin ? 'Enter your password' : 'At least 12 characters'}
+              />
+            )}
+            {isReset && (
+              <>
+                <PasswordField label="New password" name="newPassword" value={form.newPassword} onChange={onChange} autoComplete="new-password" minLength={12} maxLength={72} placeholder="At least 12 characters" />
+                <PasswordField label="Confirm new password" name="confirmPassword" value={form.confirmPassword} onChange={onChange} autoComplete="new-password" minLength={12} maxLength={72} placeholder="Re-enter your new password" />
+              </>
+            )}
+            {isLogin && <div className="auth-forgot"><button type="button" onClick={() => onModeChange('forgot')}>Forgot password?</button></div>}
+            <button className="button-primary auth-submit" disabled={busy}>{busy ? 'Please wait…' : buttonText}<FiArrowUpRight /></button>
           </form>
-          <div className="auth-toggle">{isLogin ? 'New to SupportHub?' : 'Already have an account?'} <button onClick={onToggle}>{isLogin ? 'Create account' : 'Sign in'}</button></div>
+          <div className="auth-toggle">
+            {isLogin ? (
+              <>New to SupportHub? <button type="button" onClick={() => onModeChange('register')}>Create account</button></>
+            ) : isRegister ? (
+              <>Already have an account? <button type="button" onClick={() => onModeChange('login')}>Sign in</button></>
+            ) : (
+              <>Remembered your password? <button type="button" onClick={() => onModeChange('login')}>Sign in</button></>
+            )}
+          </div>
           <div className="auth-secure"><FiShield /> Protected account access</div>
         </div>
       </section>
     </div>
+  )
+}
+
+function PasswordField({ label, name, value, onChange, autoComplete, minLength, maxLength, placeholder }) {
+  const [visible, setVisible] = useState(false)
+  return (
+    <label className="password-field">
+      {label}
+      <span className="password-input-wrap">
+        <input
+          name={name}
+          type={visible ? 'text' : 'password'}
+          value={value}
+          onChange={onChange}
+          autoComplete={autoComplete}
+          minLength={minLength}
+          maxLength={maxLength}
+          required
+          placeholder={placeholder}
+        />
+        <button
+          className="password-visibility"
+          type="button"
+          onClick={() => setVisible((current) => !current)}
+          aria-label={visible ? 'Hide password' : 'Show password'}
+          aria-pressed={visible}
+        >
+          {visible ? <FiEyeOff /> : <FiEye />}
+        </button>
+      </span>
+    </label>
+  )
+}
+
+function PasswordSettings({ user, form, busy, onChange, onSubmit }) {
+  return (
+    <section className="panel security-panel">
+      <div className="panel-heading">
+        <div>
+          <h3>Change your password</h3>
+          <p>Update credentials for {user.email}. Use at least 12 characters.</p>
+        </div>
+        <FiLock />
+      </div>
+      <form className="portal-form security-form" onSubmit={onSubmit}>
+        <PasswordField label="Current password" name="currentPassword" value={form.currentPassword} onChange={onChange} autoComplete="current-password" placeholder="Enter your current password" />
+        <PasswordField label="New password" name="newPassword" value={form.newPassword} onChange={onChange} autoComplete="new-password" minLength={12} maxLength={72} placeholder="At least 12 characters" />
+        <PasswordField label="Confirm new password" name="confirmPassword" value={form.confirmPassword} onChange={onChange} autoComplete="new-password" minLength={12} maxLength={72} placeholder="Re-enter your new password" />
+        <button className="button-primary" disabled={busy}><FiLock />{busy ? 'Updating…' : 'Change password'}</button>
+      </form>
+    </section>
   )
 }
 
@@ -797,7 +975,7 @@ function TeamManagement({ users, isAdmin, onCreate, onToggle }) {
         <div className="team-list">{visibleUsers.map((member) => <article className="team-member" key={member.id}><div className="avatar">{initials(member.name)}</div><div className="team-member-copy"><strong>{member.name}</strong><span>{member.email}</span></div><span className={`role-pill role-${member.role}`}>{ROLE_LABELS[member.role] || member.role}</span><span className={`active-pill ${member.is_active ? 'enabled' : 'disabled'}`}>{member.is_active ? 'Active' : 'Inactive'}</span>{isAdmin && member.role !== 'admin' && <button className="button-quiet" onClick={() => onToggle(member)}>{member.is_active ? 'Deactivate' : 'Activate'}</button>}</article>)}</div>
         {!visibleUsers.length && <EmptyState title="No users in this view" text="Change the selected role or create a support team account." />}
       </section>
-      {isAdmin && <section className="panel add-member-panel"><div className="panel-heading"><div><h3>Add a team member</h3><p>New team accounts require a strong password.</p></div><FiUsers /></div><form className="portal-form" onSubmit={submit}><label>Full name<input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} minLength={2} maxLength={100} required /></label><label>Email address<input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required /></label><label>Temporary password<input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} minLength={12} required /></label><label>Role<select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}><option value="agent">Support agent</option><option value="manager">Support manager</option></select></label><button className="button-primary" disabled={creating}><FiPlus />{creating ? 'Creating…' : 'Create account'}</button></form></section>}
+      {isAdmin && <section className="panel add-member-panel"><div className="panel-heading"><div><h3>Add a team member</h3><p>New team accounts require a strong password.</p></div><FiUsers /></div><form className="portal-form" onSubmit={submit}><label>Full name<input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} minLength={2} maxLength={100} required /></label><label>Email address<input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required /></label><PasswordField label="Temporary password" name="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} autoComplete="new-password" minLength={12} maxLength={72} placeholder="At least 12 characters" /><label>Role<select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}><option value="agent">Support agent</option><option value="manager">Support manager</option></select></label><button className="button-primary" disabled={creating}><FiPlus />{creating ? 'Creating…' : 'Create account'}</button></form></section>}
     </div>
   )
 }

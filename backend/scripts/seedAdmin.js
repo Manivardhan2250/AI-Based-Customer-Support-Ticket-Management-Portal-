@@ -3,6 +3,7 @@ require("dotenv").config();
 
 const bcrypt = require("bcrypt");
 const pool = require("../config/database");
+const { isValidNewPassword } = require("../services/passwordResetService");
 
 async function createAdmin() {
   const { ADMIN_NAME, ADMIN_EMAIL, ADMIN_PASSWORD } = process.env;
@@ -13,8 +14,8 @@ async function createAdmin() {
     );
   }
 
-  if (ADMIN_PASSWORD.length < 12) {
-    throw new Error("Admin password must contain at least 12 characters.");
+  if (!isValidNewPassword(ADMIN_PASSWORD)) {
+    throw new Error("Admin password must contain at least 12 characters and no more than 72 UTF-8 bytes.");
   }
 
   const email = ADMIN_EMAIL.trim().toLowerCase();

@@ -50,11 +50,12 @@ exports.createTeamUser = async (req, res) => {
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ||
       typeof password !== "string" ||
       password.length < 12 ||
+      Buffer.byteLength(password, "utf8") > 72 ||
       !TEAM_ROLES.includes(role)
     ) {
       return res.status(400).json({
         success: false,
-        message: "Provide a valid name, email, 12-character password, and team role",
+        message: "Provide a valid name, email, password (12 to 72 UTF-8 bytes), and team role",
       });
     }
 

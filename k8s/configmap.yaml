@@ -13,4 +13,6 @@ data:
   JWT_EXPIRES_IN: 1d
   UPLOAD_DIR: /app/uploads
   OPENAI_MODEL: gpt-4o-mini
-  CORS_ORIGIN: http://localhost:30080,http://localhost:8080
+  FRONTEND_URL: http://localhost:8082
+  SMTP_SECURE: "false"
+  CORS_ORIGIN: http://localhost:30080,http://localhost:8080,http://localhost:8081,http://localhost:8082

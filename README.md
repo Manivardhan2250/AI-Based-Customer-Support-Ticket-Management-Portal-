@@ -94,6 +94,13 @@ docker compose ps
 Open <http://localhost:8080>. The API is also available on port `5000`.
 The frontend host port defaults to `8080`; if that port is already in use, set
 `FRONTEND_PORT=8081` in the root `.env` and open <http://localhost:8081>.
+The default `CORS_ORIGIN` allowlist includes the documented local ports; add
+the frontend's exact origin there if you choose a different host port.
+
+Password reset emails require SMTP settings in `.env` (`SMTP_HOST`, `SMTP_PORT`,
+`SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM`) and a matching `FRONTEND_URL`.
+Without them, the reset endpoint reports that email recovery is unavailable;
+it never claims an email was sent.
 
 The PostgreSQL initialization scripts run **only when the `postgres_data` volume is first created**. Existing database volumes are preserved across restarts. Do not remove the volume to troubleshoot unless you intend to permanently delete its database contents.
 
@@ -142,7 +149,9 @@ kubectl apply -f .\k8s\configmap.yaml
 kubectl create configmap supporthub-db-init -n supporthub `
   --from-file=001_schema.sql=.\backend\database\schema.sql `
   --from-file=002_notifications.sql=.\backend\database\migrations\001_notifications.sql `
-  --from-file=003_ticket_workflow.sql=.\backend\database\migrations\002_ticket_workflow.sql
+  --from-file=003_ticket_workflow.sql=.\backend\database\migrations\002_ticket_workflow.sql `
+  --from-file=004_password_reset_tokens.sql=.\backend\database\migrations\003_password_reset_tokens.sql `
+  --dry-run=client -o yaml | kubectl apply -f -
 ```
 
 ### 3. Start the database and initialize it
@@ -166,13 +175,10 @@ kubectl rollout status deployment/frontend -n supporthub
 kubectl get pods,services -n supporthub
 ```
 
-Open <http://localhost:30080> when the local cluster exposes NodePorts. If the NodePort is not reachable from the host, forward the frontend to an available local port:
-
-```powershell
-kubectl port-forward service/frontend 8082:80 -n supporthub
-```
-
-Then open <http://localhost:8082>. Keep the port-forward command running while using the app.
+The frontend Service is a LoadBalancer on port `8082`; open
+<http://localhost:8082>. Docker Desktop may show its external IP as pending
+while still exposing the service on localhost. Clusters without local
+LoadBalancer support can use `kubectl port-forward` as a fallback.
 
 Create a protected environment file **outside the repository** containing `ADMIN_NAME`, `ADMIN_EMAIL`, and a private `ADMIN_PASSWORD` of at least 12 characters. Create the Kubernetes Secret and run the one-time seed Job:
 
@@ -186,6 +192,28 @@ kubectl delete secret supporthub-admin -n supporthub
 ```
 
 The seed command refuses to overwrite an existing account. Create additional agents and managers in the administrator's Team Management screen.
+
+### Password changes and recovery email
+
+Authenticated users can change their own passwords from **Password & security**.
+The sign-in screen also supports visibility toggles and email-based password
+recovery. Reset links are one-time and expire after 30 minutes.
+
+For Kubernetes, create a protected environment file **outside the repository**
+with `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, and `MAIL_FROM`,
+then apply it as a Secret:
+
+```powershell
+kubectl create secret generic supporthub-mail -n supporthub `
+  --from-env-file=C:\secure\supporthub-mail.env `
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl rollout restart deployment/backend -n supporthub
+```
+
+Set `FRONTEND_URL` in `k8s/configmap.yaml` to the URL users can actually open.
+Without working SMTP settings, the app reports that email recovery is
+unavailable instead of pretending to have sent a link. Never commit SMTP
+credentials.
 
 ## Postman and pgAdmin
 
