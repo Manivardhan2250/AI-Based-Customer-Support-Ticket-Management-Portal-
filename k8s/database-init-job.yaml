@@ -1,0 +1,59 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: supporthub-database-init
+  namespace: supporthub
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          command:
+            - sh
+            - -c
+            - until pg_isready -h postgres -U "$DB_USER" -d "$DB_NAME"; do sleep 2; done
+          env:
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: supporthub-secrets
+                  key: DB_USER
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: supporthub-config
+                  key: DB_NAME
+      containers:
+        - name: initialize-schema
+          image: postgres:16-alpine
+          command:
+            - sh
+            - -c
+            - for file in /sql/*.sql; do PGPASSWORD="$DB_PASSWORD" psql -v ON_ERROR_STOP=1 -h postgres -U "$DB_USER" -d "$DB_NAME" -f "$file"; done
+          env:
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: supporthub-secrets
+                  key: DB_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: supporthub-secrets
+                  key: DB_PASSWORD
+            - name: DB_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: supporthub-config
+                  key: DB_NAME
+          volumeMounts:
+            - name: schema-files
+              mountPath: /sql
+              readOnly: true
+      volumes:
+        - name: schema-files
+          configMap:
+            name: supporthub-db-init
